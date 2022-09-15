@@ -1,8 +1,12 @@
 import telebot
 import os.path
-bot = telebot.TeleBot('5332535441:AAHmyrfr4G0zsUsZpA5YuK77rl838dlIxGA')
+import requests
+
+API_TOKEN = ''
 TEL_BASE_PATH = 'C:\\Users\\gehor\\Documents\\BI\\PyCharm\\Domashka9\\tel_base\\'
 MENU_TEXT = 'Выберите пункт меню:\n1. Показать все записи\n2. Добавить вручную\n3. Добавить из файла\n4. Экспортировать в файл\n5. Поиск по записям'
+bot = telebot.TeleBot(API_TOKEN)
+
 
 @bot.message_handler(commands=['start', 'help'])
 def take_start(msg: telebot.types.Message):
@@ -44,23 +48,29 @@ def take_menu(msg: telebot.types.Message):
 
 
 def add_box_contact(msg: telebot.types.Message):
-    bot.send_message(chat_id=msg.from_user.id, text=f'{msg.document.file_name}\n{msg.document.file_id}')
-    # zap_tmp = []
-    # with open(msg.document.file_id, mode='r', encoding='utf-8') as data:
-    #     for line in data:
-    #         zap_tmp.append(line.replace('\n', ''))
-    # zap_knig = []
-    # if '' in zap_tmp:
-    #     empty_str = -1
-    #     zap_tmp.append('')
-    #     for index, i in enumerate(zap_tmp):
-    #         if i == '':
-    #             zap_knig.append(zap_tmp[empty_str + 1:index])
-    #             empty_str = index
-    # else:
-    #     for zap in zap_tmp:
-    #         zap_knig.append(zap.split(','))
-    # bot.send_message(chat_id=msg.from_user.id, text=f'Получены записи\n{show_spis(zap_knig)}')
+    file_name = TEL_BASE_PATH + str(msg.from_user.id) + '.txt'
+    file_info = bot.get_file(msg.document.file_id)
+    data = requests.get(f'https://api.telegram.org/file/bot{API_TOKEN}/{file_info.file_path}')
+    bot.send_message(chat_id=msg.from_user.id, text=data.text)
+    zap_tmp = data.text.split('\r\n')
+    zap_knig = []
+    if '' in zap_tmp:
+        empty_str = -1
+        zap_tmp.append('')
+        for index, i in enumerate(zap_tmp):
+            if i == '':
+                zap_knig.append(zap_tmp[empty_str+1:index])
+                empty_str = index
+    else:
+        for zap in zap_tmp:
+            zap_knig.append(zap.split(','))
+    for zap in zap_tmp:
+        zap_knig.append(zap.split(','))
+    bot.send_message(chat_id=msg.from_user.id, text=f'Получены записи\n{show_spis(zap_knig)}')
+    zap_knig.extend(upload(file_name))
+    download(file_name, zap_knig)
+    bot.send_message(chat_id=msg.from_user.id, text=MENU_TEXT)
+    bot.register_next_step_handler(msg, take_menu)
 
 
 def add_contact(msg: telebot.types.Message):
@@ -68,7 +78,7 @@ def add_contact(msg: telebot.types.Message):
     tmp = upload(file_name)
     zapros = msg.text.split(',')
     tmp.append(zapros)
-    download(file_name, 1, tmp)
+    download(file_name, tmp)
     bot.send_message(chat_id=msg.from_user.id, text=f'Запись добавлена')
     bot.send_message(chat_id=msg.from_user.id, text=MENU_TEXT)
     bot.register_next_step_handler(msg, take_menu)
@@ -122,24 +132,11 @@ def show_spis(spis):
 
 
 #сохранение в файл
-def download(file_name, format_zapisi, knigka):
+def download(file_name, knigka):
     with open(file_name, mode='w+', encoding='utf-8') as data:
-        if format_zapisi:
-            for index, i in enumerate(knigka):
-                if index < len(knigka) - 1:
-                    data.write(f'{",".join(i)}\n')
-                else:
-                    data.write(f'{",".join(i)}')
-        else:
-            for index, i in enumerate(knigka):
-                for jindex, j in enumerate(i):
-                    # data.write(f'{j}\n')
-                    if jindex == len(i) - 1 and index == len(knigka) - 1:
-                        data.write(f'{j}')
-                    else:
-                        data.write(f'{j}\n')
-                if index < len(knigka) - 1:
-                    data.write('\n')
+        uploaded_list = [f'{",".join(key)}' for key in knigka]
+        uploaded_str = '\n'.join(uploaded_list)
+        data.write(uploaded_str)
 
 
 print('Бот запущен')
